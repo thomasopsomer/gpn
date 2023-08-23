@@ -153,13 +153,15 @@ def merge_datasets():
             ignore_index=True,
         ).sample(frac=1, random_state=42)
         #
-        n_shards = math.ceil(len(split_intervals) / samples_per_file)
+        total = len(split_intervals)
+        n_shards = math.ceil(total / samples_per_file)
         assert n_shards < 10000
-        for i in tqdm(range(n_shards)):
+
+        for i, start in enumerate(range(0, total, samples_per_file)):
             merged_split_dir = merged_dataset_dir / split
             merged_split_dir.mkdir(parents=True, exist_ok=True)
             merged_path = merged_split_dir / f"shard_{i:05}.jsonl.zst"
-            split_intervals.iloc[i::n_shards].to_json(
+            split_intervals.iloc[start:start + samples_per_file].to_json(
                 merged_path, orient="records", lines=True,
                 compression={'method': 'zstd', 'threads': -1}
             )
