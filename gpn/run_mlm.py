@@ -34,7 +34,8 @@ from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 import datasets
 from datasets import load_dataset, DatasetDict, concatenate_datasets
 
-#import evaluate
+import evaluate
+
 import transformers
 from transformers import (
     CONFIG_MAPPING,
@@ -400,6 +401,26 @@ def main():
             batched=True, remove_columns=remove_columns,
         )
 
+        def preprocess_logits_for_metrics(logits, labels):
+            if isinstance(logits, tuple):
+                # Depending on the model and config, logits may contain extra tensors,
+                # like past_key_values, but logits always come first
+                logits = logits[0]
+            return logits.argmax(dim=-1)
+
+        metric = evaluate.load("accuracy")
+
+        def compute_metrics(eval_preds):
+            preds, labels = eval_preds
+            # preds have the same shape as the labels, after the argmax(-1) has been calculated
+            # by preprocess_logits_for_metrics
+            labels = labels.reshape(-1)
+            preds = preds.reshape(-1)
+            mask = labels != -100
+            labels = labels[mask]
+            preds = preds[mask]
+            return metric.compute(predictions=preds, references=labels)
+
     if data_args.do_test:
         test_dataset = raw_datasets["test"].map(
             lambda examples: tokenize_function(examples, data_args.soft_masked_loss_weight_test),
@@ -417,6 +438,8 @@ def main():
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
         eval_dataset=eval_dataset if training_args.do_eval else None,
+        compute_metrics=compute_metrics if training_args.do_eval else None,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics if training_args.do_eval else None,
         tokenizer=tokenizer,
         data_collator=data_collator,
     )

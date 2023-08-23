@@ -14,6 +14,7 @@ install_requires = [
     "pandarallel",
     "bioframe",
     "zstandard",
+    "evaluate"
 ]
 
 

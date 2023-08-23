@@ -46,7 +46,7 @@ dataset_dir = data_dir / "dataset" / f"w_{window_size}_s_{step_size}_rc_{add_rc}
 merged_dataset_dir = data_dir / "merged_dataset" / f"w_{window_size}_s_{step_size}_rc_{add_rc}"
 
 
-def get_assembly_genome_annotation_and_order(assembly: str):
+def get_assembly_genome_annotation_and_order(assembly: str, overwrite: bool = False):
     """ """
     with tempfile.TemporaryDirectory() as tmp_dir:
         #
@@ -57,6 +57,10 @@ def get_assembly_genome_annotation_and_order(assembly: str):
         output_genome_path = genome_dir / f"{assembly}.fa.gz"
         output_annotation_path = annotation_dir / f"{assembly}.gff.gz"
         #
+        if output_genome_path.exists() and output_annotation_path.exists() and not overwrite:
+            print(f"assembly: {assembly} already present, skipping")
+            return
+
         dl_cmd = f"datasets download genome accession {assembly} --include genome,gff3 --no-progressbar"
         unzip_cmd = "unzip ncbi_dataset.zip"
         gzip_genome_cmd = f"gzip -c {tmp_genome_path} > {output_genome_path}"
@@ -154,6 +158,7 @@ def merge_datasets():
         ).sample(frac=1, random_state=42)
         #
         total = len(split_intervals)
+        print(f"Number of sample for {split} dataset: {total}")
         n_shards = math.ceil(total / samples_per_file)
         assert n_shards < 10000
 
