@@ -20,7 +20,7 @@ assemblies["Assembly Name"] = assemblies["Assembly Name"].str.replace(" ", "_")
 
 # train, val, test
 splits = ["train", "validation", "test"]
-split_proportions = [0.99, 0.005, 0.005]
+split_proportions = [1, 0, 0]
 whitelist_validation_chroms= ["NC_003075.7"]    # Arabidopsis thaliana chr4
 whitelist_test_chroms = ["NC_003076.8"]         # Arabidopsis thaliana chr5
 
@@ -172,17 +172,17 @@ def merge_datasets():
             )
 
 
-for assembly, row in assemblies.iterrows():
-    print(f"assembly: {assembly}")
-    get_assembly_genome_annotation_and_order(assembly)
+if __name__ == "__main__":
 
+    for assembly, row in assemblies.iterrows():
+        print(f"assembly: {assembly}")
+        get_assembly_genome_annotation_and_order(assembly)
 
-for assembly in assemblies.index:
-    print(assembly)
-    #
-    build_and_save_assembly_intervals(assembly, window_size=window_size)
-    #
-    build_and_save_assembly_dataset(assembly)
+    for assembly in assemblies.index:
+        print(assembly)
+        #
+        build_and_save_assembly_intervals(assembly, window_size=window_size)
+        #
+        build_and_save_assembly_dataset(assembly)
 
-
-merge_datasets()
+    merge_datasets()
