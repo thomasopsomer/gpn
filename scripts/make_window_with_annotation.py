@@ -39,6 +39,17 @@ def get_repeat_intervals_from_fasta(fasta_path: str):
 def get_annotation_expanded(gtf_path: str):
     """ """
     gtf = load_table(gtf_path)
+    # rename chroms
+    id_to_chrom_map = {
+        "1": "NC_003070.9" ,
+        "2": "NC_003071.7",
+        "3": "NC_003074.8",
+        "4": "NC_003075.7",
+        "5": "NC_003076.8",
+        "Mt": "NC_037304.1",
+        "Pt": "NC_000932.1"
+    }
+    gtf["chrom"] = gtf["chrom"].map(lambda x: id_to_chrom_map[x])
     #
     repeats_bed_path = "./analysis/arabidopsis/input/repeats.bed.gz"
     repeats = pd.read_csv(repeats_bed_path, sep="\t").rename(columns=dict(genoName="chrom", genoStart="start", genoEnd="end"))[
@@ -122,22 +133,22 @@ def main():
     fasta_path = genome_dir / f"{assembly}.fa.gz"
     genome = Genome(path=str(fasta_path))
 
-    # rename chr
-    chrom_to_id_map = {
-        "NC_003070.9": "1",
-        "NC_003071.7": "2",
-        "NC_003074.8": "3",
-        "NC_003075.7": "4",
-        "NC_003076.8": "5",
-        "NC_037304.1": "Mt",
-        "NC_000932.1": "Pt"
-    }
-    chroms = genome._genome.keys()
-    for chrom in chroms:
-        seq = genome._genome.pop(chrom)
-        genome._genome[chrom_to_id_map[chrom]] = seq
-
-    genome.filter_chroms(["1", "2", "3", "4", "5"])
+    # # rename chr
+    # chrom_to_id_map = {
+    #     "NC_003070.9": "1",
+    #     "NC_003071.7": "2",
+    #     "NC_003074.8": "3",
+    #     "NC_003075.7": "4",
+    #     "NC_003076.8": "5",
+    #     "NC_037304.1": "Mt",
+    #     "NC_000932.1": "Pt"
+    # }
+    # chroms = genome._genome.keys()
+    # for chrom in chroms:
+    #     seq = genome._genome.pop(chrom)
+    #     genome._genome[chrom_to_id_map[chrom]] = seq
+    #
+    # genome.filter_chroms(["1", "2", "3", "4", "5"])
 
     #
     gtf_path = "data/Arabidopsis_thaliana.TAIR10.55.gff3.gz"
@@ -152,3 +163,7 @@ def main():
     embedding_folder.mkdir(exist_ok=True)
     embedding_windows_path = embedding_folder / "windows.parquet"
     windows.to_parquet(embedding_windows_path, index=False)
+
+
+if __name__ == "__main__":
+    main()
