@@ -233,6 +233,8 @@ class DataTrainingArguments:
     soft_masked_loss_weight_evaluation: Optional[float] = field(default=1.0)
     soft_masked_loss_weight_test: Optional[float] = field(default=1.0)
     do_test: bool = field(default=False)
+    #
+    streaming: bool = field(default=False, metadata={"help": "Enable streaming mode"})
 
     def __post_init__(self):
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:
@@ -312,7 +314,7 @@ def main():
         data_args.dataset_config_name,
         cache_dir=model_args.cache_dir,
         use_auth_token=True if model_args.use_auth_token else None,
-        streaming=True,
+        streaming=data_args.streaming,
     )
     print(raw_datasets)
 
@@ -387,7 +389,7 @@ def main():
         "validation": data_args.soft_masked_loss_weight_evaluation,
     }
 
-    remove_columns =  ["assembly", "chrom", "start", "end", "strand", "seq"]
+    remove_columns = ["assembly", "chrom", "start", "end", "strand", "seq"]
     compute_metrics = None
 
     if training_args.do_train:

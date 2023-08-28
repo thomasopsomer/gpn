@@ -24,10 +24,14 @@ split_proportions = [1, 0, 0]
 whitelist_validation_chroms= ["NC_003075.7"]    # Arabidopsis thaliana chr4
 whitelist_test_chroms = ["NC_003076.8"]         # Arabidopsis thaliana chr5
 
-samples_per_file = 2_000_000
+samples_per_file = 1_000_000
 window_size = 512
 step_size = 256
 add_rc = True
+
+
+subsample_to_target = False
+target_assembly = "GCF_000001735.4"
 
 
 # download data from ncbi, extract data from archive, rename and compress data agai
@@ -156,6 +160,15 @@ def merge_datasets():
             tqdm((pd.read_parquet(path) for path in split_parquet_paths)),
             ignore_index=True,
         ).sample(frac=1, random_state=42)
+
+        #
+        if subsample_to_target and split == "train":
+            n_target = (split_intervals.assembly == target_assembly).sum()
+            split_intervals = split_intervals.groupby("assembly").sample(
+                n=n_target, random_state=42
+            ).sample(frac=1, random_state=42)
+            print(split_intervals["assembly"].value_counts())
+
         #
         total = len(split_intervals)
         print(f"Number of sample for {split} dataset: {total}")
