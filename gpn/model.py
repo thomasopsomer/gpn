@@ -113,23 +113,24 @@ class ConvNetPreTrainedModel(PreTrainedModel):
 class ConvNetModel(ConvNetPreTrainedModel):
     def __init__(
         self,
-        config,
+        config: ConvNetConfig,
         **kwargs,
     ):
         super().__init__(config)
         self.config = config
 
         self.embedding = OneHotEmbedding(config.hidden_size)
-
         self.dilation_schedule = get_dilation_schedule(config)
-        self.encoder = nn.Sequential(*[
+
+        conv_layers = [
             ConvLayer(
                 hidden_size=config.hidden_size,
                 kernel_size=config.kernel_size,
                 dilation=self.dilation_schedule[i],
             )
             for i in range(config.n_layers)
-        ])
+        ]
+        self.encoder = nn.Sequential(*conv_layers)
         self.post_init()
 
     def forward(self, input_ids=None, **kwargs):
@@ -165,6 +166,104 @@ class ConvNetForMaskedLM(ConvNetPreTrainedModel):
             logits=logits,
         )
 
+
+class MyConvNetConfig(ConvNetConfig):
+    model_type = "MyConvNet"
+
+
+class MyConvNetPreTrainedModel(PreTrainedModel):
+    config_class = MyConvNetConfig
+    base_model_prefix = "model"
+    #supports_gradient_checkpointing = True
+    _keys_to_ignore_on_load_missing = [r"position_ids"]
+
+    def _init_weights(self, module):
+        """Initialize the weights"""
+        if isinstance(module, nn.Linear):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+
+class MyConvNetModel(MyConvNetPreTrainedModel):
+    def __init__(
+        self,
+        config,
+        **kwargs,
+    ):
+        super().__init__(config)
+        self.config = config
+
+        self.embedding = OneHotEmbedding(config.vocab_size)
+        self.dilation_schedule = get_dilation_schedule(config)
+
+        first_conv = nn.Sequential(
+            TransposeLayer(),
+            nn.Conv1d(
+                in_channels=config.vocab_size,
+                out_channels=config.hidden_size,
+                padding="same",
+                kernel_size=config.kernel_size,
+            ),
+            TransposeLayer(),
+            nn.GELU(),
+            nn.LayerNorm(config.hidden_size),
+        )
+
+        conv_layers = [
+            first_conv,
+            *[
+                ConvLayer(
+                    hidden_size=config.hidden_size,
+                    kernel_size=config.kernel_size,
+                    dilation=self.dilation_schedule[i],
+                )
+                for i in range(config.n_layers - 1)
+            ]
+        ]
+        self.encoder = nn.Sequential(*conv_layers)
+        self.post_init()
+
+    def forward(self, input_ids=None, **kwargs):
+        x = self.embedding(input_ids)
+        x = self.encoder(x)
+        return BaseModelOutput(last_hidden_state=x)
+
+class MyConvNetForMaskedLM(MyConvNetPreTrainedModel):
+    def __init__(
+        self,
+        config,
+    ):
+        super().__init__(config)
+        self.config = config
+        self.model = MyConvNetModel(config)
+        self.cls = ConvNetOnlyMLMHead(config)
+        self.post_init()
+
+    def forward(self, input_ids=None, labels=None, loss_weight=None, **kwargs):
+        hidden_state = self.model(input_ids=input_ids, **kwargs).last_hidden_state
+        logits = self.cls(hidden_state)
+        loss = None
+        if labels is not None:
+            loss_fct = CrossEntropyLoss(reduction="none")
+            labels = labels.view(-1)
+            loss = loss_fct(logits.view(-1, self.config.vocab_size), labels)
+            loss_weight = loss_weight.view(-1)
+            loss_weight[labels==-100] = 0.0
+            loss = (loss * loss_weight / loss_weight.sum()).sum()
+        return MaskedLMOutput(
+            loss=loss,
+            logits=logits,
+        )
 
 class ConvNetForSequenceClassification(ConvNetPreTrainedModel):
     def __init__(self, config):
@@ -223,6 +322,11 @@ AutoConfig.register("ConvNet", ConvNetConfig)
 AutoModel.register(ConvNetConfig, ConvNetModel)
 AutoModelForMaskedLM.register(ConvNetConfig, ConvNetForMaskedLM)
 AutoModelForSequenceClassification.register(ConvNetConfig, ConvNetForSequenceClassification)
+
+AutoConfig.register("MyConvNet", MyConvNetConfig)
+AutoModel.register(MyConvNetConfig, MyConvNetModel)
+AutoModelForMaskedLM.register(MyConvNetConfig, MyConvNetForMaskedLM)
+
 
 
 from transformers import RoFormerConfig, RoFormerModel, RoFormerForMaskedLM

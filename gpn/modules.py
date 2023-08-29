@@ -18,7 +18,7 @@ class TransposeLayer(nn.Module):
 class ConvLayer(nn.Module):
     def __init__(
         self,
-        hidden_size=None,
+        hidden_size: int,
         **kwargs,
     ):
         super().__init__()

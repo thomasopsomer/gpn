@@ -15,11 +15,12 @@ from gpn.data import Genome, load_dataset_from_file_or_dir
 
 
 class ModelCenterEmbedding(torch.nn.Module):
-    def __init__(self, model_path, center_window_size):
+    def __init__(self, model_path, center_window_size, avg_rev: bool = True):
         super().__init__()
         self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
         self.center_window_size = center_window_size
-        
+        self.avg_rev = avg_rev
+
     def get_center_embedding(self, input_ids):
         embedding = self.model.forward(input_ids=input_ids).last_hidden_state
         center = embedding.shape[1] // 2
@@ -31,8 +32,12 @@ class ModelCenterEmbedding(torch.nn.Module):
 
     def forward(self, input_ids_fwd=None, input_ids_rev=None):
         embedding_fwd = self.get_center_embedding(input_ids_fwd)
-        embedding_rev = self.get_center_embedding(input_ids_rev)
-        embedding = (embedding_fwd+embedding_rev)/2
+        if self.avg_rev:
+            embedding_rev = self.get_center_embedding(input_ids_rev)
+            embedding = (embedding_fwd+embedding_rev)/2
+        else:
+            embedding = embedding_fwd
+        #
         return embedding
 
 
@@ -111,11 +116,14 @@ if __name__ == "__main__":
         "--is-file", action="store_true", help="windows_PATH is a file, not directory",
     )
     parser.add_argument(
+        "--avg-rev", action="store_true", default=True, help="",
+    )
+    parser.add_argument(
         "--format", type=str, default="parquet",
         help="If is-file, specify format (parquet, csv, json)",
     )
     args = parser.parse_args()
-
+    # print(args.avg_rev)
     windows = load_dataset_from_file_or_dir(
         args.windows_path, split=args.split, is_file=args.is_file,
         format=args.format,

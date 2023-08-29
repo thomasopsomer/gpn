@@ -47,14 +47,17 @@ def get_annotation_expanded(gtf_path: str):
         "4": "NC_003075.7",
         "5": "NC_003076.8",
         "Mt": "NC_037304.1",
-        "Pt": "NC_000932.1"
+        "M": "NC_037304.1",
+        "Pt": "NC_000932.1",
+        "C": "NC_000932.1"
     }
     gtf["chrom"] = gtf["chrom"].map(lambda x: id_to_chrom_map[x])
     #
     repeats_bed_path = "./analysis/arabidopsis/input/repeats.bed.gz"
     repeats = pd.read_csv(repeats_bed_path, sep="\t").rename(columns=dict(genoName="chrom", genoStart="start", genoEnd="end"))[
         ["chrom", "start", "end"]]
-
+    repeats.chrom = repeats.chrom.str.replace("Chr", "")
+    repeats.chrom = repeats.chrom.map(lambda x: id_to_chrom_map.get(x))
     #
     repeats.chrom = repeats.chrom.str.replace("Chr", "")
     repeats = bf.merge(repeats).drop(columns="n_intervals")
@@ -132,6 +135,7 @@ def main():
     assembly = "GCF_000001735.4"
     fasta_path = genome_dir / f"{assembly}.fa.gz"
     genome = Genome(path=str(fasta_path))
+
 
     # # rename chr
     # chrom_to_id_map = {
