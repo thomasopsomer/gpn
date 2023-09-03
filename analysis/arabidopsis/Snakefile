@@ -153,7 +153,7 @@ rule rename_reference:
 
 rule download_annotation:
     output:
-        "output/annotation.gtf.gz",
+        "output/annotation.gtfv.gz",
     shell:
         "wget --no-check-certificate {config[GTF_URL]} -O {output}"
 

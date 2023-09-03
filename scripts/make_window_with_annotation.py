@@ -171,3 +171,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+    """
+    python -m gpn.get_embeddings \
+        /mnt/shared_thomas/gpn/data/embeddings/windows.parquet \
+        /mnt/shared_thomas/gpn/data/genome/GCF_000001735.4.fa.gz \
+        512 \
+        /mnt/shared_thomas/gpn/models/GPN_Arabidopsis_multispecies/ConvNet_batch200_weight0.1 \
+        data/embeddings/ConvNet_batch200_weight0.1_NO_AVG_REV.embbedings.parquet \
+         --per-device-batch-size 4000 --is-file \
+        --dataloader-num-workers 16
+    """
+    

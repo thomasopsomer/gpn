@@ -26,10 +26,10 @@ def main():
     genome = Genome(path=str(fasta_path))
 
     CHROMS = [
-        "NC_003070.9",  # 1
-        "NC_003071.7",  # 2
-        "NC_003074.8",  # 3
-        "NC_003075.7",  # 4
+        # "NC_003070.9",  # 1
+        # "NC_003071.7",  # 2
+        # "NC_003074.8",  # 3
+        # "NC_003075.7",  # 4
         "NC_003076.8",  # 5
     ]
     genome.filter_chroms(CHROMS)
@@ -43,11 +43,23 @@ def main():
     )
     print(positions)
     
-    whole_genome_dir = Path("./data/whole_genome")
-    whole_genome_dir.mkdir(parents=True, exist_ok=True)
-    position_path = whole_genome_dir / "positions.parquet"
+    # whole_genome_dir = Path("./data/whole_genome")
+    position_dir = Path("./data/positions")
+    position_dir.mkdir(parents=True, exist_ok=True)
+    position_path = position_dir / "chrom_5_positions.parquet"
     positions.to_parquet(position_path, index=False)
 
 
 if __name__ == "__main__":
     main()
+    
+    """
+    python -m gpn.get_logits \
+        data/positions/chrom_5_positions.parquet \
+        data/genome/GCF_000001735.4.fa.gz \
+        512 \
+        models/GPN_Arabidopsis_multispecies/ConvNet_batch200_weight0.1/ \
+        data/logits/chrom_5_ConvNet_batch200_weight0.1.parquet \
+        --per-device-batch-size 2048 --is-file \
+        --dataloader-num-workers 16
+    """

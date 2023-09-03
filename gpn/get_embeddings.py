@@ -20,6 +20,7 @@ class ModelCenterEmbedding(torch.nn.Module):
         self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
         self.center_window_size = center_window_size
         self.avg_rev = avg_rev
+        print(avg_rev)
 
     def get_center_embedding(self, input_ids):
         embedding = self.model.forward(input_ids=input_ids).last_hidden_state
@@ -116,7 +117,7 @@ if __name__ == "__main__":
         "--is-file", action="store_true", help="windows_PATH is a file, not directory",
     )
     parser.add_argument(
-        "--avg-rev", action="store_true", default=True, help="",
+        "--no-avg-rev", action="store_true", default=False, help="",
     )
     parser.add_argument(
         "--format", type=str, default="parquet",
@@ -132,7 +133,11 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_path if args.tokenizer_path else args.model_path
     )
-    model = ModelCenterEmbedding(args.model_path, args.center_window_size)
+    model = ModelCenterEmbedding(
+        args.model_path,
+        args.center_window_size,
+        avg_rev=(not args.no_avg_rev)
+    )
     pred = get_embeddings(
         windows, genome, tokenizer, model,
         per_device_batch_size=args.per_device_batch_size,
