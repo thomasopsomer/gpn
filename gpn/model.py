@@ -71,7 +71,7 @@ class ConvNetConfig(PretrainedConfig):
         initializer_range=0.02,
         # for classification head:
         hidden_dropout_prob=0.1,
-        hidden_act="gelu", 
+        hidden_act="gelu",
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -83,6 +83,7 @@ class ConvNetConfig(PretrainedConfig):
         self.dilation_max = dilation_max
         self.dilation_cycle = dilation_cycle
         self.initializer_range = initializer_range
+        # for classification head
         self.hidden_dropout_prob = hidden_dropout_prob
         self.hidden_act = hidden_act
 

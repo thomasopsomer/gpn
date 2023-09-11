@@ -369,11 +369,33 @@ def report_motifs(
     )
 
 
+# report_motifs(
+#     snakemake.input[0],
+#     snakemake.output[0] + "/",
+#     suffix="",#snakemake.output[0] + "/",
+#     top_n_matches=1,
+#     meme_motif_db=snakemake.input[1],
+#     background=[0.33230, 0.16770, 0.16770, 0.33230], 
+# )
+
+from pathlib import Path
+
+modisco_dir = Path("/home/thomas/gpn/data/modisco")
+modisco_path = modisco_dir / "chrom_5_results.h5"
+meme_path = "/home/thomas/gpn/data/plantfdb/Ath_TF_binding_motifs.meme"
+
 report_motifs(
-    snakemake.input[0],
-    snakemake.output[0] + "/",
-    suffix="",#snakemake.output[0] + "/",
+    str(modisco_path),
+    str(modisco_dir),
+    meme_path,
+    suffix="",
     top_n_matches=1,
-    meme_motif_db=snakemake.input[1],
     background=[0.33230, 0.16770, 0.16770, 0.33230], 
 )
+
+"""
+wget http://planttfdb.gao-lab.org/download/motif/Ath_TF_binding_motifs.meme.gz -O - | gunzip > data/plantfdb/Ath_TF_binding_motifs.meme && \
+    mkdir data/plantfdb/individual && \
+    wget http://planttfdb.gao-lab.org/download/motif/Ath_TF_binding_motifs_individual.tar.gz -O data/plantfdb/individual/ && \
+    tar xzvf data/plantfdb/individual/Ath_TF_binding_motifs_individual.tar.gz
+"""

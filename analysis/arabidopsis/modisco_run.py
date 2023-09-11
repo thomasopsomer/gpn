@@ -75,3 +75,5 @@ pos_patterns, neg_patterns = modiscolite.tfmodisco.TFMoDISco(
     verbose=True,
 )
 modiscolite.io.save_hdf5(snakemake.output[0], pos_patterns, neg_patterns)
+
+

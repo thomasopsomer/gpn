@@ -37,7 +37,24 @@ def get_repeat_intervals_from_fasta(fasta_path: str):
 
 
 def get_annotation_expanded(gtf_path: str):
-    """ """
+    """
+    exemple feature count for gtf file of Arabidopsis
+        exon               313952
+        CDS                286067
+        five_prime_UTR      56384
+        mRNA                48359
+        three_prime_UTR     48308
+        gene                27655
+        ncRNA_gene           5178
+        lnc_RNA              3879
+        tRNA                  689
+        ncRNA                 377
+        miRNA                 325
+        snoRNA                287
+        snRNA                  82
+        rRNA                   15
+        chromosome              7
+    """
     gtf = load_table(gtf_path)
     # rename chroms
     id_to_chrom_map = {
@@ -54,12 +71,12 @@ def get_annotation_expanded(gtf_path: str):
     gtf["chrom"] = gtf["chrom"].map(lambda x: id_to_chrom_map[x])
     #
     repeats_bed_path = "./analysis/arabidopsis/input/repeats.bed.gz"
-    repeats = pd.read_csv(repeats_bed_path, sep="\t").rename(columns=dict(genoName="chrom", genoStart="start", genoEnd="end"))[
-        ["chrom", "start", "end"]]
-    repeats.chrom = repeats.chrom.str.replace("Chr", "")
-    repeats.chrom = repeats.chrom.map(lambda x: id_to_chrom_map.get(x))
+    repeats = pd.read_csv(repeats_bed_path, sep="\t") \
+        .rename(columns=dict(genoStart="start", genoEnd="end"))
+    repeats["chrom"] = repeats.genoName.map(lambda x: id_to_chrom_map.get(x.replace("Chr", "")))
+    # repeats.chrom = repeats.chrom.map(lambda x: id_to_chrom_map.get(x))
+    repeats = repeats[["chrom", "start", "end"]]
     #
-    repeats.chrom = repeats.chrom.str.replace("Chr", "")
     repeats = bf.merge(repeats).drop(columns="n_intervals")
     repeats["feature"] = "Repeat"
     gtf = pd.concat([gtf, repeats], ignore_index=True)
@@ -179,7 +196,16 @@ if __name__ == "__main__":
         512 \
         /mnt/shared_thomas/gpn/models/GPN_Arabidopsis_multispecies/ConvNet_batch200_weight0.1 \
         data/embeddings/ConvNet_batch200_weight0.1_NO_AVG_REV.embbedings.parquet \
-         --per-device-batch-size 4000 --is-file \
+         --per-device-batch-size 2048 --is-file \
+        --dataloader-num-workers 16
+    
+    python -m gpn.get_embeddings \
+        /mnt/shared_thomas/gpn/data/embeddings/windows.parquet \
+        /mnt/shared_thomas/gpn/data/genome/GCF_000001735.4.fa.gz \
+        512 \
+        /mnt/shared_thomas/gpn/models/GPN_Arabidopsis_multispecies/MyConvNet_12layers_batch256_weight0.1 \
+        data/embeddings/MyConvNet_12layers_batch256_weight0.1.embbedings.parquet \
+        --per-device-batch-size 4000 --is-file \
         --dataloader-num-workers 16
     """
     
