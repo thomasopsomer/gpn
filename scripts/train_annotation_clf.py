@@ -134,18 +134,6 @@ def compute_metrics(eval_preds: EvalPrediction):
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, preds, average="macro"
     )
-    # p, r, f1, s = precision_recall_fscore_support(
-    #     eval_preds.label_ids,
-    #     eval_preds.predictions.argmax(axis=-1),
-    # )
-    # per_label_metrics = {}
-    # for i, label in id2labels.items():
-    #     per_label_metrics[label] = {
-    #         "precision": p[i],
-    #         "recall": r[i],
-    #         "f1": f1[i],
-    #         "support": s[i]
-    #     }
     acc = accuracy_score(labels, preds)
     #
     return {
@@ -153,9 +141,6 @@ def compute_metrics(eval_preds: EvalPrediction):
         "f1": f1,
         "precision": precision,
         "recall": recall,
-        # "f1": f1.mean(),
-        # "precision": p.mean(),
-        # "recall": r.mean(),
     }
 
 
@@ -286,7 +271,7 @@ class DataTrainingArguments:
 
 model_args = ModelArguments(
     # model_name_or_path="models/GPN_Arabidopsis_multispecies/MyConvNet_12layers_batch256_weight0.1",
-    model_name_or_path="models/annotation_clf/GPN_12layers_pretrained_b256_no_rev",
+    model_name_or_path="models/annotation_clf/GPN_12layers_no_pretrained_b256_no_rev",
     tokenizer_name="gonzalobenegas/tokenizer-dna-mlm",
 )
 
@@ -391,6 +376,7 @@ def main():
     
     # prepare dataset
     unused_columns = [c for c in ds["train"].features.keys() if c not in ["input_ids", "labels"]]
+
     ds = ds.map(
         lambda batch: prepare_dataset_items(
             batch,
@@ -403,7 +389,43 @@ def main():
         remove_columns=unused_columns,
         num_proc=os.cpu_count()
     )
+    # if training_args.do_train:
+    #     train_ds = ds["train"].map(
+    #         lambda batch: prepare_dataset_items(
+    #             batch,
+    #             genome=genome,
+    #             tokenizer=tokenizer,
+    #             add_rev_strand=data_args.add_rev_strand,
+    #             label2id=config.label2id
+    #         ),
+    #         batched=True,
+    #         remove_columns=unused_columns,
+    #         num_proc=os.cpu_count()
+    #     )
+    # else:
+    #     train_ds = None
+
+    # if training_args.do_eval:
+    #     eval_ds = ds["eval"].map(
+    #         lambda batch: prepare_dataset_items(
+    #             batch,
+    #             genome=genome,
+    #             tokenizer=tokenizer,
+    #             add_rev_strand=False,
+    #             label2id=config.label2id
+    #         ),
+    #         batched=True,
+    #         remove_columns=unused_columns,
+    #         num_proc=os.cpu_count()
+    #     )
+    # else:
+    #     eval_ds = None
+    
     ds = ds.shuffle()
+    
+    train_ds = ds["train"] if training_args.do_train else None
+    eval_ds = ds["eval"] if training_args.do_eval else None
+
     #
     pprint(get_dataset_label_distribution(ds, model.config.id2label))
 
@@ -411,8 +433,8 @@ def main():
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=ds.get("train") if training_args.do_train else None,
-        eval_dataset=ds.get("eval") if training_args.do_eval else None,
+        train_dataset=train_ds,
+        eval_dataset=eval_ds,
         compute_metrics=compute_metrics
     )
     
@@ -448,6 +470,29 @@ def main():
             test_output.predictions.argmax(axis=-1),
             target_names=model.config.label2id.keys()
         ))
+
+        from sklearn.metrics import ConfusionMatrixDisplay
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(11, 10))
+        
+        ConfusionMatrixDisplay.from_predictions(
+            y_true=test_output.label_ids,
+            y_pred=test_output.predictions.argmax(axis=-1),
+            # display_labels=labels,
+            normalize="true",
+            ax=ax
+        )
+        
+        # ax.set_xticklabels(labels, rotation=45, ha='right')
+        ax.xaxis.set_ticklabels(labels, rotation=45, ha='right')
+        ax.yaxis.set_ticklabels(labels)
+        ax.set_title(
+            f"Confusion matrix on region annotation task"
+        )
+        model_name = model_args.model_name_or_path.split("/")[-1]
+        plt.savefig(f"confusion_matrix_{model_name}.png")
+
+        
 
         # p, r, f1, s = precision_recall_fscore_support(
         #     test_output.label_ids,
@@ -521,12 +566,12 @@ python scripts/train_annotation_clf.py --do_train --do_eval \
     --dataloader_num_workers 6 \
     --seed 42 \
     --save_strategy epoch \
-    --num_train_epochs 5  \
+    --num_train_epochs 4  \
     --evaluation_strategy steps --eval_steps 1000 \
     --save_strategy epoch \
     --save_total_limit 10 \
     --run_name GPN_12layers_pretrained_b256_with_rev \
-    --output_dir models/annotation_clf/MyConvNet_12layers_batch256_weight0_1_with_rev_strand \
+    --output_dir models/annotation_clf/GPN_12layers_pretrained_b256_with_rev \
     --model_type MyConvNet \
     --model_name_or_path models/GPN_Arabidopsis_multispecies/MyConvNet_12layers_batch256_weight0.1 \
     --log_level info \
@@ -535,6 +580,30 @@ python scripts/train_annotation_clf.py --do_train --do_eval \
     --per_device_eval_batch_size 1024 \
     --add_rev_strand True \
     --config_overrides n_layers=13
+    
+    
+GPN_DIR=/mnt/shared_thomas/gpn
+python scripts/train_annotation_clf.py --do_train --do_eval \
+    --ann_windows_path $GPN_DIR/data/embeddings/windows.parquet \
+    --genome_path $GPN_DIR/data/genome/GCF_000001735.4.fa.gz \
+    --fp16 --report_to wandb \
+    --tokenizer_name gonzalobenegas/tokenizer-dna-mlm \
+    --dataloader_num_workers 6 \
+    --seed 42 \
+    --save_strategy epoch \
+    --num_train_epochs 4  \
+    --evaluation_strategy steps --eval_steps 1000 \
+    --save_strategy epoch \
+    --save_total_limit 10 \
+    --run_name GPN_24layers_pretrained_b200_no_rev \
+    --output_dir models/annotation_clf/GPN_24layers_pretrained_b200_no_rev \
+    --model_type MyConvNet \
+    --model_name_or_path $GPN_DIR/models/GPN_Arabidopsis_multispecies/MyConvNet_25layers_batch200_weight0.1 \
+    --log_level info \
+    --learning_rate 1e-3 \
+    --per_device_train_batch_size 200 \
+    --per_device_eval_batch_size 1024 \
+    --add_rev_strand False
 
 
 """

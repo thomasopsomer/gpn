@@ -110,13 +110,16 @@ def build_and_save_assembly_intervals(assembly: str, window_size: int):
     return defined_intervals, balanced_intervals
 
 
-def build_and_save_assembly_dataset(assembly):
+def build_and_save_assembly_dataset(assembly, use_balanced_intervals: bool = True):
     """ """
     intervals_assembly_dir = Path(f"data/intervals/{window_size}/{assembly}")
-    intervals_balanced_path = intervals_assembly_dir / "balanced.parquet"
+    if use_balanced_intervals:
+        intervals_path = intervals_assembly_dir / "balanced.parquet"
+    else:
+        intervals_path = intervals_assembly_dir / "defined.parquet"
 
     #
-    intervals = pd.read_parquet(intervals_balanced_path)
+    intervals = pd.read_parquet(intervals_path)
     fasta_path = genome_dir / f"{assembly}.fa.gz"
     genome = Genome(path=str(fasta_path))
 
