@@ -247,7 +247,7 @@ class MyConvNetForMaskedLM(MyConvNetPreTrainedModel):
         super().__init__(config)
         self.config = config
         self.model = MyConvNetModel(config)
-        self.cls = ConvNetOnlyMLMHead(config)
+        self.cls = MLMHead(config)
         self.post_init()
 
     def forward(self, input_ids=None, labels=None, loss_weight=None, **kwargs):
