@@ -413,7 +413,7 @@ def main():
                 raise ValueError("--do_eval requires a validation dataset")
 
             eval_dataset = raw_datasets["validation"].map(
-                lambda examples: tokenize_function(examples, data_args.soft_masked_loss_weight_eval),
+                lambda examples: tokenize_function(examples, data_args.soft_masked_loss_weight_evaluation),
                 batched=True,
                 remove_columns=remove_columns,
                 num_proc=data_args.preprocessing_num_workers,

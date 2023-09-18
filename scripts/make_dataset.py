@@ -8,9 +8,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
-from gpn.define_intervals import filter_length, filter_defined, get_balanced_intervals
-from gpn.utils import Genome, load_table
-from gpn.make_dataset_mlm import make_windows, get_seq
+from gpn.data import filter_length, filter_defined, get_balanced_intervals, Genome, load_table, make_windows, get_seq
 
 
 assemblies_path = "./analysis/arabidopsis/input/assembly_list/brassicales_annotated_filt.tsv"
@@ -26,9 +24,10 @@ whitelist_test_chroms = ["NC_003076.8"]         # Arabidopsis thaliana chr5
 
 samples_per_file = 1_000_000
 window_size = 512
-step_size = 256
+stride = 64
+step_size = window_size - stride
 add_rc = True
-
+balanced = False
 
 subsample_to_target = False
 target_assembly = "GCF_000001735.4"
@@ -46,8 +45,8 @@ annotation_dir.mkdir(parents=True, exist_ok=True)
 #
 intervals_dir = data_dir / "intervals"
 #
-dataset_dir = data_dir / "dataset" / f"w_{window_size}_s_{step_size}_rc_{add_rc}"
-merged_dataset_dir = data_dir / "merged_dataset" / f"w_{window_size}_s_{step_size}_rc_{add_rc}"
+dataset_dir = data_dir / "dataset" / f"w_{window_size}_s_{step_size}_rc_{add_rc}_balanced_{balanced}"
+merged_dataset_dir = data_dir / "merged_dataset" / f"w_{window_size}_s_{step_size}_rc_{add_rc}_balanced_{balanced}"
 
 
 def get_assembly_genome_annotation_and_order(assembly: str, overwrite: bool = False):
@@ -110,7 +109,12 @@ def build_and_save_assembly_intervals(assembly: str, window_size: int):
     return defined_intervals, balanced_intervals
 
 
-def build_and_save_assembly_dataset(assembly, use_balanced_intervals: bool = True):
+def build_and_save_assembly_dataset(
+    assembly,
+    window_size: int,
+    step_size: int,
+    use_balanced_intervals: bool = True,
+):
     """ """
     intervals_assembly_dir = Path(f"data/intervals/{window_size}/{assembly}")
     if use_balanced_intervals:
@@ -197,8 +201,13 @@ if __name__ == "__main__":
     for assembly in assemblies.index:
         print(assembly)
         #
-        build_and_save_assembly_intervals(assembly, window_size=window_size)
+        # build_and_save_assembly_intervals(assembly, window_size=window_size)
         #
-        build_and_save_assembly_dataset(assembly)
+        build_and_save_assembly_dataset(
+            assembly,
+            window_size=window_size,
+            step_size=step_size,
+            use_balanced_intervals=balanced
+        )
 
     merge_datasets()
