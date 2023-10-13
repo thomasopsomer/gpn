@@ -72,6 +72,9 @@ class ConvNetConfig(PretrainedConfig):
         # for classification head:
         hidden_dropout_prob=0.1,
         hidden_act="gelu",
+        #
+        one_hot: bool = True,
+        pad_token_id: int = 3,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -86,6 +89,8 @@ class ConvNetConfig(PretrainedConfig):
         # for classification head
         self.hidden_dropout_prob = hidden_dropout_prob
         self.hidden_act = hidden_act
+        self.one_hot = one_hot
+        self.pad_token_id = pad_token_id
 
 
 class ConvNetPreTrainedModel(PreTrainedModel):
@@ -119,7 +124,7 @@ class ConvNetModel(ConvNetPreTrainedModel):
     ):
         super().__init__(config)
         self.config = config
-
+        #
         self.embedding = OneHotEmbedding(config.hidden_size)
         self.dilation_schedule = get_dilation_schedule(config)
 
@@ -196,30 +201,44 @@ class MyConvNetPreTrainedModel(PreTrainedModel):
 
 
 class MyConvNetModel(MyConvNetPreTrainedModel):
+    """ """
+
     def __init__(
         self,
-        config,
+        config: MyConvNetConfig,
         **kwargs,
     ):
         super().__init__(config)
         self.config = config
 
-        self.embedding = OneHotEmbedding(config.vocab_size)
-        self.dilation_schedule = get_dilation_schedule(config)
-
-        first_conv = nn.Sequential(
-            TransposeLayer(),
-            nn.Conv1d(
-                in_channels=config.vocab_size,
-                out_channels=config.hidden_size,
-                padding="same",
+        if config.one_hot:
+            self.embedding = OneHotEmbedding(config.vocab_size)
+            first_conv = nn.Sequential(
+                TransposeLayer(),
+                nn.Conv1d(
+                    in_channels=config.vocab_size,
+                    out_channels=config.hidden_size,
+                    padding="same",
+                    kernel_size=config.kernel_size,
+                ),
+                TransposeLayer(),
+                nn.GELU(),
+                nn.LayerNorm(config.hidden_size),
+            )
+        else:
+            self.embedding = nn.Embedding(
+                num_embeddings=config.vocab_size,
+                embedding_dim=config.hidden_size,
+                padding_idx=config.pad_token_id
+            )
+            first_conv = ConvLayer(
+                hidden_size=config.hidden_size,
                 kernel_size=config.kernel_size,
-            ),
-            TransposeLayer(),
-            nn.GELU(),
-            nn.LayerNorm(config.hidden_size),
-        )
-
+                # dilation=self.dilation_schedule[i],
+            )
+        #
+        self.dilation_schedule = get_dilation_schedule(config)
+        #
         conv_layers = [
             first_conv,
             *[
@@ -239,6 +258,7 @@ class MyConvNetModel(MyConvNetPreTrainedModel):
         x = self.encoder(x)
         return BaseModelOutput(last_hidden_state=x)
 
+
 class MyConvNetForMaskedLM(MyConvNetPreTrainedModel):
     def __init__(
         self,
@@ -254,13 +274,19 @@ class MyConvNetForMaskedLM(MyConvNetPreTrainedModel):
         hidden_state = self.model(input_ids=input_ids, **kwargs).last_hidden_state
         logits = self.cls(hidden_state)
         loss = None
+        b, s = input_ids.shape
         if labels is not None:
-            loss_fct = CrossEntropyLoss(reduction="none")
-            labels = labels.view(-1)
-            loss = loss_fct(logits.view(-1, self.config.vocab_size), labels)
-            loss_weight = loss_weight.view(-1)
-            loss_weight[labels==-100] = 0.0
-            loss = (loss * loss_weight / loss_weight.sum()).sum()
+            if loss_weight is not None:
+                loss_fct = CrossEntropyLoss(reduction="none")
+                labels = labels.view(-1)
+                loss = loss_fct(logits.view(-1, self.config.vocab_size), labels)
+                loss_weight = loss_weight.view(-1)
+                loss_weight[labels==-100] = 0.0
+                loss = (loss * loss_weight / loss_weight.sum()).sum()
+            else:
+                loss_fct = CrossEntropyLoss()
+                loss = loss_fct(logits.view(-1, self.config.vocab_size), labels.view(-1))
+                
         return MaskedLMOutput(
             loss=loss,
             logits=logits,

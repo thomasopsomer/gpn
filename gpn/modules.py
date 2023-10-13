@@ -46,6 +46,54 @@ class ConvLayer(nn.Module):
         return x
 
 
+# class ConvLayerOpt(nn.Module):
+#     def __init__(
+#         self,
+#         hidden_size: int,
+#         norm: str = "batch",
+#         **kwargs,
+#     ):
+#         super().__init__()
+        
+#         if norm == "batch":
+#             norm_layer_cls = nn.BatchNorm1d
+#         elif norm == "layer":
+#             norm_layer_cls = nn.LayerNorm
+#         else:
+#             raise ValueError(f"Unknown norm: {norm}")
+
+#         #
+#         self.conv = ConvBlock(
+#             dim=hidden_size,
+#         )
+#         self.conv = nn.Sequential(
+#             nn.Conv1d(
+#                 in_channels=hidden_size,
+#                 out_channels=hidden_size,
+#                 padding="same",
+#                 **kwargs,
+#             ),
+#             nn.GELU(),
+#             norm_layer_cls(hidden_size)
+#         )
+#         self.ffn = nn.Sequential(
+#             nn.Conv1d(
+#                 in_channels=hidden_size,
+#                 out_channels=hidden_size,
+#                 padding=0,
+#                 kernel_size=1
+#             ),
+#             nn.GELU(),
+#             norm_layer_cls(hidden_size)
+#         )
+
+#     def forward(self, x):
+#         x = x + self.conv(x)
+#         x = x + self.ffn(x)
+#         return x
+
+
+
 class OneHotEmbedding(nn.Module):
     def __init__(
         self,

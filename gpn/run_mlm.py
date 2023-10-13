@@ -250,6 +250,42 @@ class DataTrainingArguments:
                     raise ValueError("`validation_file` should be a csv, a json or a txt file.")
 
 
+def tokenize_function(
+    examples,
+    tokenizer,
+    add_loss_weight: bool = True,
+    soft_masked_weight: float = None,
+    chrom_to_proba_df: dict = None
+):
+    seqs = examples["seq"]
+    if not add_loss_weight:
+        seqs = [s.upper() for s in seqs]
+
+    res = tokenizer(
+        examples["seq"],
+        return_special_tokens_mask=True,
+        padding=True,
+        truncation=False,
+        return_token_type_ids=False,
+        return_attention_mask=True,
+        return_tensors="pt"
+    )
+    res["repeat_mask"] = np.zeros_like(res["input_ids"], dtype=float)
+    res["repeat_mask"][np.char.islower([list(x) for x in examples["seq"]])] = 1.
+
+    if add_loss_weight:
+        #
+        if "loss_weight" in examples:
+            # loss_weights = np.vstack(examples["loss_weight"])
+            res["loss_weight"] = examples["loss_weight"]
+        #
+        elif soft_masked_weight is not None:
+            res["loss_weight"] = np.ones_like(res["input_ids"], dtype=float)
+            res["loss_weight"][np.char.islower([list(x) for x in examples["seq"]])] = soft_masked_weight
+    #
+    return res
+
+
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
@@ -316,7 +352,6 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
         streaming=data_args.streaming,
     )
-    print(raw_datasets)
 
     # Load pretrained model and tokenizer
     #
@@ -367,43 +402,50 @@ def main():
         )
     else:
         logger.info("Training new model from scratch")
+        config.pad_token_id = tokenizer.pad_token_id
+        config.vocab_size = len(tokenizer)
+        #
         model = AutoModelForMaskedLM.from_config(config)
-
-    def tokenize_function(examples, soft_masked_weight):
-        res = tokenizer(
-            examples["seq"],
-            return_special_tokens_mask=True,
-            padding=False,
-            truncation=False,
-            return_token_type_ids=False,
-            return_attention_mask=False,
-        )
-        res["loss_weight"] = np.ones_like(res["input_ids"], dtype=float)
-        res["loss_weight"][
-            np.char.islower([list(x) for x in examples["seq"]])
-        ] = soft_masked_weight
-        return res
 
     soft_masked_weight = {
         "train": data_args.soft_masked_loss_weight_train,
         "validation": data_args.soft_masked_loss_weight_evaluation,
     }
     remove_columns = ["assembly", "chrom", "start", "end", "strand", "seq"]
-
+    #
     with training_args.main_process_first(desc="dataset map tokenization"):
 
         if training_args.do_train:
             if "train" not in raw_datasets:
                 raise ValueError("--do_train requires a train dataset")
 
-            train_dataset = raw_datasets["train"].map(
-                lambda examples: tokenize_function(examples, data_args.soft_masked_loss_weight_train),
-                batched=True,
-                remove_columns=remove_columns,
-                num_proc=data_args.preprocessing_num_workers,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on every text in dataset"
-            )
+            if data_args.streaming:
+                train_dataset = raw_datasets["train"].map(
+                    lambda examples: tokenize_function(
+                        examples,
+                        add_loss_weight=config.one_hot,
+                        tokenizer=tokenizer,
+                        soft_masked_weight=data_args.soft_masked_loss_weight_train,
+
+                    ),
+                    batched=True,
+                    remove_columns=remove_columns,
+                )
+            else:
+                train_dataset = raw_datasets["train"].map(
+                    lambda examples: tokenize_function(
+                        examples,
+                        add_loss_weight=config.one_hot,
+                        tokenizer=tokenizer,
+                        soft_masked_weight=data_args.soft_masked_loss_weight_train,
+                    ),
+                    batched=True,
+                    remove_columns=remove_columns,
+                    num_proc=data_args.preprocessing_num_workers,
+                    # load_from_cache_file=not data_args.overwrite_cache,
+                    desc="Running tokenizer on every text in dataset"
+                )
+
             if data_args.max_train_samples is not None:
                 max_train_samples = min(len(train_dataset), data_args.max_train_samples)
                 train_dataset = train_dataset.select(range(max_train_samples))
@@ -412,52 +454,50 @@ def main():
             if "validation" not in raw_datasets:
                 raise ValueError("--do_eval requires a validation dataset")
 
-            eval_dataset = raw_datasets["validation"].map(
-                lambda examples: tokenize_function(examples, data_args.soft_masked_loss_weight_evaluation),
-                batched=True,
-                remove_columns=remove_columns,
-                num_proc=data_args.preprocessing_num_workers,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on every text in dataset"
-            )
+            if data_args.streaming:
+                eval_dataset = raw_datasets["validation"].map(
+                    lambda examples: tokenize_function(
+                        examples,
+                        tokenizer=tokenizer,
+                        add_loss_weight=False
+                    ),
+                    batched=True,
+                    remove_columns=remove_columns,
+                )
+            else:
+                eval_dataset = raw_datasets["validation"].map(
+                    lambda examples: tokenize_function(
+                        examples,
+                        tokenizer=tokenizer,
+                        add_loss_weight=False
+                    ),
+                    batched=True,
+                    remove_columns=remove_columns,
+                    num_proc=data_args.preprocessing_num_workers,
+                    # load_from_cache_file=not data_args.overwrite_cache,
+                    desc="Running tokenizer on every text in dataset"
+                )
 
             if data_args.max_eval_samples is not None:
                 max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
                 eval_dataset = eval_dataset.select(range(max_eval_samples))
 
 
-            # def preprocess_logits_for_metrics(logits, labels):
-            #     if isinstance(logits, tuple):
-            #         # Depending on the model and config, logits may contain extra tensors,
-            #         # like past_key_values, but logits always come first
-            #         logits = logits[0]
-            #     return logits.argmax(dim=-1)
-
-            # metric = evaluate.load("accuracy")
-
-            # def compute_metrics(eval_preds):
-            #     preds, labels = eval_preds
-            #     # preds have the same shape as the labels, after the argmax(-1) has been calculated
-            #     # by preprocess_logits_for_metrics
-            #     labels = labels.reshape(-1)
-            #     preds = preds.reshape(-1)
-            #     mask = labels != -100
-            #     labels = labels[mask]
-            #     preds = preds[mask]
-            #     return metric.compute(predictions=preds, references=labels)
-
-
     if data_args.do_test:
         test_dataset = raw_datasets["test"].map(
-            lambda examples: tokenize_function(examples, data_args.soft_masked_loss_weight_test),
+            lambda examples: tokenize_function(
+                examples,
+                tokenizer=tokenizer,
+                add_loss_weight=False
+            ),
             batched=True,
             remove_columns=remove_columns,
-            num_proc=data_args.preprocessing_num_workers,
-            load_from_cache_file=not data_args.overwrite_cache,
-            desc="Running tokenizer on every text in dataset"
+            # num_proc=data_args.preprocessing_num_workers,
+            # load_from_cache_file=not data_args.overwrite_cache,
+            # desc="Running tokenizer on every text in dataset"
         )
-    
-    data_collator = DataCollatorForLanguageModelingSimplified(
+
+    data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm_probability=data_args.mlm_probability,
     )

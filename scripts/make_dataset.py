@@ -11,22 +11,33 @@ from tqdm import tqdm
 from gpn.data import filter_length, filter_defined, get_balanced_intervals, Genome, load_table, make_windows, get_seq
 
 
-assemblies_path = "./analysis/arabidopsis/input/assembly_list/brassicales_annotated_filt.tsv"
+# assemblies_path = "./analysis/arabidopsis/input/assembly_list/brassicales_annotated_filt.tsv"
+assemblies_path = "./assemblies/mus_assemblies.tsv"
 assemblies = pd.read_csv(assemblies_path, sep="\t", index_col=0)
 assemblies["Assembly Name"] = assemblies["Assembly Name"].str.replace(" ", "_")
+
 
 
 # train, val, test
 splits = ["train", "validation", "test"]
 split_proportions = [1, 0, 0]
-whitelist_validation_chroms= ["NC_003075.7"]    # Arabidopsis thaliana chr4
-whitelist_test_chroms = ["NC_003076.8"]         # Arabidopsis thaliana chr5
+# whitelist_validation_chroms= ["NC_003075.7"]    # Arabidopsis thaliana chr4
+# whitelist_test_chroms = ["NC_003076.8"]         # Arabidopsis thaliana chr5
+whitelist_validation_chroms= ["NC_000083.7"]    # mus 17
+whitelist_test_chroms = ["NC_000084.7"]         # mus 18
 
+chroms_subset = None
+# chroms_subset = [
+#     "NC_000067.7",  # train
+#     "NC_000083.7",  # val
+#     "NC_000084.7"   # test
+# ]
 samples_per_file = 1_000_000
 window_size = 512
+# stride = 256
 stride = 64
 step_size = window_size - stride
-add_rc = True
+add_rc = False
 balanced = False
 
 subsample_to_target = False
@@ -35,7 +46,7 @@ target_assembly = "GCF_000001735.4"
 
 # download data from ncbi, extract data from archive, rename and compress data agai
 
-data_dir = Path("./data")
+data_dir = Path("./data/mus")
 data_dir.mkdir(parents=True, exist_ok=True)
 
 genome_dir = data_dir / "genome"
@@ -77,7 +88,7 @@ def get_assembly_genome_annotation_and_order(assembly: str, overwrite: bool = Fa
 
 def build_and_save_assembly_intervals(assembly: str, window_size: int):
     """ """
-    intervals_assembly_dir = Path(f"data/intervals/{window_size}/{assembly}")
+    intervals_assembly_dir = data_dir / f"intervals/{window_size}/{assembly}"
     intervals_assembly_dir.mkdir(parents=True, exist_ok=True)
     #
     fasta_path = genome_dir / f"{assembly}.fa.gz"
@@ -114,9 +125,10 @@ def build_and_save_assembly_dataset(
     window_size: int,
     step_size: int,
     use_balanced_intervals: bool = True,
+    add_rc: bool = False
 ):
     """ """
-    intervals_assembly_dir = Path(f"data/intervals/{window_size}/{assembly}")
+    intervals_assembly_dir = data_dir / f"intervals/{window_size}/{assembly}"
     if use_balanced_intervals:
         intervals_path = intervals_assembly_dir / "balanced.parquet"
     else:
@@ -124,8 +136,12 @@ def build_and_save_assembly_dataset(
 
     #
     intervals = pd.read_parquet(intervals_path)
+    
+    if chroms_subset:
+        intervals = intervals[intervals.chrom.isin(chroms_subset)]
+
     fasta_path = genome_dir / f"{assembly}.fa.gz"
-    genome = Genome(path=str(fasta_path))
+    genome = Genome(path=str(fasta_path), subset_chroms=chroms_subset)
 
     # intervals = balanced_intervals
     intervals = make_windows(
@@ -201,13 +217,14 @@ if __name__ == "__main__":
     for assembly in assemblies.index:
         print(assembly)
         #
-        # build_and_save_assembly_intervals(assembly, window_size=window_size)
+        build_and_save_assembly_intervals(assembly, window_size=window_size)
         #
         build_and_save_assembly_dataset(
             assembly,
             window_size=window_size,
             step_size=step_size,
-            use_balanced_intervals=balanced
+            use_balanced_intervals=balanced,
+            add_rc=add_rc
         )
 
     merge_datasets()
