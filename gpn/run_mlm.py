@@ -235,6 +235,7 @@ class DataTrainingArguments:
     do_test: bool = field(default=False)
     #
     streaming: bool = field(default=False, metadata={"help": "Enable streaming mode"})
+    add_loss_weight: bool = field(default=False)
 
     def __post_init__(self):
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:
@@ -258,8 +259,8 @@ def tokenize_function(
     chrom_to_proba_df: dict = None
 ):
     seqs = examples["seq"]
-    if not add_loss_weight:
-        seqs = [s.upper() for s in seqs]
+    # if not add_loss_weight:
+    #     seqs = [s.upper() for s in seqs]
 
     res = tokenizer(
         examples["seq"],
@@ -411,6 +412,7 @@ def main():
         "train": data_args.soft_masked_loss_weight_train,
         "validation": data_args.soft_masked_loss_weight_evaluation,
     }
+
     remove_columns = ["assembly", "chrom", "start", "end", "strand", "seq"]
     #
     with training_args.main_process_first(desc="dataset map tokenization"):
@@ -423,7 +425,7 @@ def main():
                 train_dataset = raw_datasets["train"].map(
                     lambda examples: tokenize_function(
                         examples,
-                        add_loss_weight=config.one_hot,
+                        add_loss_weight=data_args.add_loss_weight,
                         tokenizer=tokenizer,
                         soft_masked_weight=data_args.soft_masked_loss_weight_train,
 
@@ -435,7 +437,7 @@ def main():
                 train_dataset = raw_datasets["train"].map(
                     lambda examples: tokenize_function(
                         examples,
-                        add_loss_weight=config.one_hot,
+                        add_loss_weight=data_args.add_loss_weight,
                         tokenizer=tokenizer,
                         soft_masked_weight=data_args.soft_masked_loss_weight_train,
                     ),
@@ -445,6 +447,10 @@ def main():
                     # load_from_cache_file=not data_args.overwrite_cache,
                     desc="Running tokenizer on every text in dataset"
                 )
+            required_columns = ["input_ids", "attention_mask"]
+            if data_args.add_loss_weight:
+                required_columns.append("loss_weight")
+            train_dataset = train_dataset.select_columns(required_columns)
 
             if data_args.max_train_samples is not None:
                 max_train_samples = min(len(train_dataset), data_args.max_train_samples)
@@ -477,6 +483,9 @@ def main():
                     # load_from_cache_file=not data_args.overwrite_cache,
                     desc="Running tokenizer on every text in dataset"
                 )
+
+            required_columns = ["input_ids", "attention_mask"]
+            eval_dataset = eval_dataset.select_columns(required_columns)
 
             if data_args.max_eval_samples is not None:
                 max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
