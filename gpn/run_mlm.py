@@ -251,12 +251,24 @@ class DataTrainingArguments:
                     raise ValueError("`validation_file` should be a csv, a json or a txt file.")
 
 
+
+# from transformers import EvalPrediction
+# def compute_metrics(eval_preds: EvalPrediction):
+#     """ """
+#     # eval_preds.
+#     print(type(eval_preds.inputs))
+#     print(eval_preds.inputs)
+#     print("kkkkkk")
+#     return {"f1": "kk"}
+    
+
+
 def tokenize_function(
     examples,
     tokenizer,
     add_loss_weight: bool = True,
     soft_masked_weight: float = None,
-    chrom_to_proba_df: dict = None
+    weight_alpha: int = 1
 ):
     seqs = examples["seq"]
     # if not add_loss_weight:
@@ -278,7 +290,9 @@ def tokenize_function(
         #
         if "loss_weight" in examples:
             # loss_weights = np.vstack(examples["loss_weight"])
+            # res["loss_weight"] = examples["loss_weight"] ** weight_alpha
             res["loss_weight"] = examples["loss_weight"]
+
         #
         elif soft_masked_weight is not None:
             res["loss_weight"] = np.ones_like(res["input_ids"], dtype=float)

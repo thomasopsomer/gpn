@@ -14,7 +14,7 @@ from typing import Optional, Tuple, Union
 
 from .modules import (
     TransposeLayer, ConvLayer, OneHotEmbedding, get_dilation_schedule,
-    GPNEmbedding,
+    GPNEmbedding, FocalLoss
 )
 
 
@@ -75,6 +75,8 @@ class ConvNetConfig(PretrainedConfig):
         #
         one_hot: bool = True,
         pad_token_id: int = 3,
+        mlm_loss: str = "default",
+        mlm_loss_focal_gamma: float = 2.0,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -91,6 +93,8 @@ class ConvNetConfig(PretrainedConfig):
         self.hidden_act = hidden_act
         self.one_hot = one_hot
         self.pad_token_id = pad_token_id
+        self.mlm_loss = mlm_loss
+        self.mlm_loss_focal_gamma = mlm_loss_focal_gamma
 
 
 class ConvNetPreTrainedModel(PreTrainedModel):
@@ -284,7 +288,12 @@ class MyConvNetForMaskedLM(MyConvNetPreTrainedModel):
                 loss_weight[labels==-100] = 0.0
                 loss = (loss * loss_weight / loss_weight.sum()).sum()
             else:
-                loss_fct = CrossEntropyLoss()
+                if self.config.mlm_loss == "default":
+                    loss_fct = CrossEntropyLoss()
+                elif self.config.mlm_loss == "focal":
+                    loss_fct = FocalLoss(gamma=self.config.mlm_loss_focal_gamma)
+                    logits = torch.softmax(logits, dim=-1)
+                #
                 loss = loss_fct(logits.view(-1, self.config.vocab_size), labels.view(-1))
                 
         return MaskedLMOutput(
